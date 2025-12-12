@@ -13,6 +13,8 @@
 #define USR2_PIN        (1 << 23)
 #define USR3_PIN        (1 << 24)
 
+static unsigned delayVal = 1000000;
+
 static void delay(volatile unsigned count) {
     while (count--) ;
 }
@@ -41,6 +43,15 @@ int main(void)
         *(volatile uint32_t*)GPIO_SETDATAOUT = USR3_PIN;
         *(volatile uint32_t*)GPIO_CLEARDATAOUT = USR0_PIN;
         *(volatile uint32_t*)GPIO_CLEARDATAOUT = USR2_PIN;
-        delay(1000000);
+        delay(delayVal);
     }
+}
+
+void default_handler()
+{
+    *(volatile uint32_t*)GPIO_SETDATAOUT = USR0_PIN;
+    *(volatile uint32_t*)GPIO_SETDATAOUT = USR2_PIN;
+    *(volatile uint32_t*)GPIO_SETDATAOUT = USR1_PIN;
+    *(volatile uint32_t*)GPIO_SETDATAOUT = USR3_PIN;
+
 }

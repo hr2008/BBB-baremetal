@@ -1,5 +1,5 @@
-    .section .vectors, "ax"
-    .global _start
+.section .vectors, "ax"
+.global _start
 _start:
     b reset
 
@@ -11,6 +11,22 @@ reset:
     str r1, [r0]
     ldr r1, =0x5555
     str r1, [r0]
+
+    /* Set stack pointer to top of SRAM */
+    ldr sp, =__stack_top__
+
+    /* Copy .data section */
+    ldr r0, =__data_load__    /* source */
+    ldr r1, =__data_start__   /* destination */
+    ldr r2, =__data_end__     /* end */
+copy_data:
+    cmp r1, r2
+    bge data_done
+    ldr r3, [r0], #4
+    str r3, [r1], #4
+    b copy_data
+data_done:
+
 
     /* Clear BSS */
     ldr r0, =__bss_start__

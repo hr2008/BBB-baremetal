@@ -1,24 +1,44 @@
 ENTRY(_start)
 
-MEMORY {
-    SRAM (rwx) : ORIGIN = 0x402F0400, LENGTH = 64K
+MEMORY
+{
+    OCM (rwx) : ORIGIN = 0x402F0400, LENGTH = 64K
 }
 
-SECTIONS {
+SECTIONS
+{
+    . = ORIGIN(OCM);
+
+    /* Code + rodata */
     .text : {
         KEEP(*(.vectors))
         *(.text*)
         *(.rodata*)
-    } > SRAM
+    } > OCM
 
+
+    /* Initialized data */
     .data : {
+        __data_start__ = .;
         *(.data*)
-    } > SRAM
+        __data_end__ = .;
+    } > OCM AT > OCM
 
-    .bss : {
+    /* Load address for .data (same as VMA here, but explicit) */
+    __data_load__ = LOADADDR(.data);
+
+    /* BSS */
+    .bss (NOLOAD) : {
         __bss_start__ = .;
         *(.bss*)
         *(COMMON)
         __bss_end__ = .;
-    } > SRAM
+    } > OCM
+
+    /* Stack */
+    .stack (NOLOAD) : {
+        __stack_bottom__ = .;
+        . = . + 8K;
+        __stack_top__ = .;
+    } > OCM
 }
