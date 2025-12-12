@@ -37,7 +37,7 @@ int main(void)
         *(volatile uint32_t*)GPIO_SETDATAOUT = USR2_PIN;
         *(volatile uint32_t*)GPIO_CLEARDATAOUT = USR1_PIN;
         *(volatile uint32_t*)GPIO_CLEARDATAOUT = USR3_PIN;
-        delay(1000000);
+        delay(delayVal);
 
         *(volatile uint32_t*)GPIO_SETDATAOUT = USR1_PIN;
         *(volatile uint32_t*)GPIO_SETDATAOUT = USR3_PIN;
