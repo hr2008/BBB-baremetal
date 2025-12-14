@@ -1,34 +1,56 @@
-.section .vectors, "ax"
+.syntax unified
+.cpu cortex-a8
 .global _start
-_start:
-    b reset
 
-    .text
+/* --------------------------------------------------
+ * Vector table
+ * -------------------------------------------------- */
+.section .vectors, "ax"
+.align 5
+_vectors_start:
+_start:
+    b reset              /* Reset */
+    b .                  /* Undefined */
+    b .                  /* SVC */
+    b .                  /* Prefetch abort */
+    b .                  /* Data abort */
+    b .                  /* Reserved */
+    b .                  /* IRQ */
+    b .                  /* FIQ */
+
+/* --------------------------------------------------
+ * Reset handler
+ * -------------------------------------------------- */
+.section .text
 reset:
-    /* Disable watchdog */
-    ldr r0, =0x44E35048        /* WDT_WSPR */
+    /* Enter SVC mode, disable IRQ & FIQ */
+    cpsid if
+    mrs r0, cpsr
+    bic r0, r0, #0x1F
+    orr r0, r0, #0x13     /* SVC mode */
+    msr cpsr_c, r0
+
+    /* Disable watchdog (AM335x requires polling) */
+    ldr r0, =0x44E35048   /* WDT_WSPR */
     ldr r1, =0xAAAA
     str r1, [r0]
+wdt_wait1:
+    ldr r2, =0x44E35034   /* WDT_WWPS */
+    ldr r3, [r2]
+    tst r3, #0x10
+    bne wdt_wait1
+
     ldr r1, =0x5555
     str r1, [r0]
+wdt_wait2:
+    ldr r3, [r2]
+    tst r3, #0x10
+    bne wdt_wait2
 
-    /* Set stack pointer to top of SRAM */
+    /* Set stack pointer */
     ldr sp, =__stack_top__
 
-    /* Copy .data section */
-    ldr r0, =__data_load__    /* source */
-    ldr r1, =__data_start__   /* destination */
-    ldr r2, =__data_end__     /* end */
-copy_data:
-    cmp r1, r2
-    bge data_done
-    ldr r3, [r0], #4
-    str r3, [r1], #4
-    b copy_data
-data_done:
-
-
-    /* Clear BSS */
+    /* Zero BSS */
     ldr r0, =__bss_start__
     ldr r1, =__bss_end__
 zero_bss:
@@ -39,7 +61,12 @@ zero_bss:
     b zero_bss
 bss_done:
 
-    /* Jump to C main */
+    /* Set vector base register */
+    ldr r0, =_vectors_start
+    mcr p15, 0, r0, c12, c0, 0   /* VBAR */
+    isb
+
+    /* Jump to C */
     bl main
 
 hang:
