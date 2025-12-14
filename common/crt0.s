@@ -24,6 +24,21 @@ _start:
 .section .text
 reset:
     /* Enter SVC mode, disable IRQ & FIQ */
+        /* Disable MMU, I-cache, D-cache */
+    mrc p15, 0, r0, c1, c0, 0   /* SCTLR */
+    bic r0, r0, #(1 << 0)      /* MMU off */
+    bic r0, r0, #(1 << 2)      /* D-cache off */
+    bic r0, r0, #(1 << 12)     /* I-cache off */
+    mcr p15, 0, r0, c1, c0, 0
+    isb
+    dsb
+    
+        /* Invalidate I-cache */
+    mov r0, #0
+    mcr p15, 0, r0, c7, c5, 0
+    dsb
+    isb
+    
     cpsid if
     mrs r0, cpsr
     bic r0, r0, #0x1F
@@ -53,13 +68,11 @@ wdt_wait2:
     /* Zero BSS */
     ldr r0, =__bss_start__
     ldr r1, =__bss_end__
-zero_bss:
-    cmp r0, r1
-    bge bss_done
     mov r2, #0
-    str r2, [r0], #4
-    b zero_bss
-bss_done:
+bss_loop:
+    cmp r0, r1
+    strlo r2, [r0], #4
+    blo bss_loop
 
     /* Set vector base register */
     ldr r0, =_vectors_start

@@ -9,62 +9,82 @@ OBJCOPY = $(CROSS)-objcopy
 # -------------------------------------------------
 # Target
 # -------------------------------------------------
-TARGET  = blink_uart
+TARGET  = enable_uart
+BUILD   = build
 
 # -------------------------------------------------
 # Flags
 # -------------------------------------------------
 CFLAGS  = -mcpu=cortex-a8 -marm -O2 \
-          -ffreestanding -nostdlib -nostartfiles
+          -ffreestanding -nostdlib -nostartfiles \
+          -fno-pic -fno-pie
 
 LDFLAGS = -T linker.ld
 
 # -------------------------------------------------
 # Source discovery (recursive)
 # -------------------------------------------------
-C_SRCS := $(shell find . -name '*.c')
-S_SRCS := $(shell find . -name '*.s')
-OBJS   := $(C_SRCS:.c=.o) $(S_SRCS:.s=.o)
+C_SRCS := $(shell find ../common -name '*.c')
+S_SRCS := $(shell find ../common -name '*.s')
+C_SRCS += $(shell find . -name '*.c')
+S_SRCS += $(shell find . -name '*.s')
+
+# -------------------------------------------------
+# Object files (mirrored into build/)
+# -------------------------------------------------
+OBJS := $(C_SRCS:%.c=$(BUILD)/%.o) \
+        $(S_SRCS:%.s=$(BUILD)/%.o)
 
 # -------------------------------------------------
 # Auto include directories
-#   - finds all directories that contain header files
 # -------------------------------------------------
-INC_DIRS := $(sort $(dir $(shell find . -name '*.h')))
+INC_DIRS := $(sort $(dir $(shell find ../common -name '*.h')))
+INC_DIRS += $(sort $(dir $(shell find . -name '*.h')))
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 
 # -------------------------------------------------
 # Default target
 # -------------------------------------------------
-all: clean $(TARGET).bin
+all: $(BUILD)/$(TARGET).bin
 
 # -------------------------------------------------
-# Compile rules
+# Ensure build directories exist
 # -------------------------------------------------
-%.o: %.c
+$(BUILD):
+	mkdir -p $(BUILD)
+
+# -------------------------------------------------
+# Compile rules (C)
+# -------------------------------------------------
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
 
-%.o: %.s
+# -------------------------------------------------
+# Compile rules (ASM)
+# -------------------------------------------------
+$(BUILD)/%.o: %.s
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
 
 # -------------------------------------------------
 # Link
 # -------------------------------------------------
-$(TARGET).elf: $(OBJS) linker.ld
+$(BUILD)/$(TARGET).elf: $(OBJS) linker.ld | $(BUILD)
 	$(LD) $(LDFLAGS) $(OBJS) -o $@
 
 # -------------------------------------------------
 # ELF -> raw binary
 # -------------------------------------------------
-$(TARGET).raw: $(TARGET).elf
+$(BUILD)/$(TARGET).raw: $(BUILD)/$(TARGET).elf
 	$(OBJCOPY) -O binary $< $@
 
 # -------------------------------------------------
 # UART ROM header
 # -------------------------------------------------
-uart_header.bin: $(TARGET).raw
+$(BUILD)/uart_header.bin: $(BUILD)/$(TARGET).raw
 	@printf "\x00\x00\x00\x00" > $@
-	@image_size=$$(stat -c%s $(TARGET).raw); \
+	@image_size=$$(stat -c%s $<); \
 	printf "$$(printf '\\\\x%02x\\\\x%02x\\\\x%02x\\\\x%02x' \
 	             $$((image_size & 0xff)) \
 	             $$(((image_size >> 8) & 0xff)) \
@@ -74,13 +94,14 @@ uart_header.bin: $(TARGET).raw
 # -------------------------------------------------
 # Final UART boot image
 # -------------------------------------------------
-$(TARGET).bin: uart_header.bin $(TARGET).raw
-	cat uart_header.bin $(TARGET).raw > $@
+$(BUILD)/$(TARGET).bin: $(BUILD)/uart_header.bin $(BUILD)/$(TARGET).raw
+	cat $^ > $@
 
 # -------------------------------------------------
 # Cleanup
 # -------------------------------------------------
 clean:
-	rm -f $(OBJS) *.elf *.raw *.bin uart_header.bin
+	rm -rf common
+	rm -rf $(BUILD)
 
 .PHONY: all clean

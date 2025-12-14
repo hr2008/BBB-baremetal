@@ -1,38 +1,107 @@
+# -------------------------------------------------
+# Toolchain
+# -------------------------------------------------
 CROSS   = arm-none-eabi
 CC      = $(CROSS)-gcc
 LD      = $(CROSS)-ld
 OBJCOPY = $(CROSS)-objcopy
 
-CFLAGS  = -mcpu=cortex-a8 -marm -O2 -nostdlib -nostartfiles -ffreestanding
+# -------------------------------------------------
+# Target
+# -------------------------------------------------
+TARGET  = blink_uart
+BUILD   = build
 
-all: blink_uart.bin
+# -------------------------------------------------
+# Flags
+# -------------------------------------------------
+CFLAGS  = -mcpu=cortex-a8 -marm -O2 \
+          -ffreestanding -nostdlib -nostartfiles \
+          -fno-pic -fno-pie
 
-crt0.o: crt0.S
-	$(CC) $(CFLAGS) -c $< -o $@
+LDFLAGS = -T linker.ld
 
-main.o: main.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# -------------------------------------------------
+# Source discovery (recursive)
+# -------------------------------------------------
+C_SRCS := $(shell find ../common -name '*.c')
+S_SRCS := $(shell find ../common -name '*.s')
+C_SRCS += $(shell find . -name '*.c')
+S_SRCS += $(shell find . -name '*.s')
 
-blink.elf: crt0.o main.o linker.ld
-	$(LD) -T linker.ld crt0.o main.o -o $@
+# -------------------------------------------------
+# Object files (mirrored into build/)
+# -------------------------------------------------
+OBJS := $(C_SRCS:%.c=$(BUILD)/%.o) \
+        $(S_SRCS:%.s=$(BUILD)/%.o)
 
-blink.bin: blink.elf
+# -------------------------------------------------
+# Auto include directories
+# -------------------------------------------------
+INC_DIRS := $(sort $(dir $(shell find ../common -name '*.h')))
+INC_DIRS += $(sort $(dir $(shell find . -name '*.h')))
+INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+
+# -------------------------------------------------
+# Default target
+# -------------------------------------------------
+all: $(BUILD)/$(TARGET).bin
+
+# -------------------------------------------------
+# Ensure build directories exist
+# -------------------------------------------------
+$(BUILD):
+	mkdir -p $(BUILD)
+
+# -------------------------------------------------
+# Compile rules (C)
+# -------------------------------------------------
+$(BUILD)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
+
+# -------------------------------------------------
+# Compile rules (ASM)
+# -------------------------------------------------
+$(BUILD)/%.o: %.s
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
+
+# -------------------------------------------------
+# Link
+# -------------------------------------------------
+$(BUILD)/$(TARGET).elf: $(OBJS) linker.ld | $(BUILD)
+	$(LD) $(LDFLAGS) $(OBJS) -o $@
+
+# -------------------------------------------------
+# ELF -> raw binary
+# -------------------------------------------------
+$(BUILD)/$(TARGET).raw: $(BUILD)/$(TARGET).elf
 	$(OBJCOPY) -O binary $< $@
 
-# UART boot header:
-# offset 0: 0x00000000
-# offset 4: image size
-uart_header.bin: blink.bin
-	printf "\x00\x00\x00\x00" > uart_header.bin
-	image_size=$$(stat -c%s blink.bin); \
+# -------------------------------------------------
+# UART ROM header
+# -------------------------------------------------
+$(BUILD)/uart_header.bin: $(BUILD)/$(TARGET).raw
+	@printf "\x00\x00\x00\x00" > $@
+	@image_size=$$(stat -c%s $<); \
 	printf "$$(printf '\\\\x%02x\\\\x%02x\\\\x%02x\\\\x%02x' \
 	             $$((image_size & 0xff)) \
-	             $$(((image_size>>8) & 0xff)) \
-	             $$(((image_size>>16) & 0xff)) \
-	             $$(((image_size>>24) & 0xff)) )" >> uart_header.bin
+	             $$(((image_size >> 8) & 0xff)) \
+	             $$(((image_size >> 16) & 0xff)) \
+	             $$(((image_size >> 24) & 0xff)) )" >> $@
 
-blink_uart.bin: blink.bin uart_header.bin
-	cat uart_header.bin blink.bin > blink_uart.bin
+# -------------------------------------------------
+# Final UART boot image
+# -------------------------------------------------
+$(BUILD)/$(TARGET).bin: $(BUILD)/uart_header.bin $(BUILD)/$(TARGET).raw
+	cat $^ > $@
 
+# -------------------------------------------------
+# Cleanup
+# -------------------------------------------------
 clean:
-	rm -f *.o *.elf *.bin
+	rm -rf common
+	rm -rf $(BUILD)
+
+.PHONY: all clean

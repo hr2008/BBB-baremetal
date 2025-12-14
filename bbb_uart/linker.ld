@@ -1,18 +1,13 @@
 ENTRY(_start)
 
-/*
- * AM335x On-Chip SRAM
- * 0x402F0000 – 0x402FFFFF (64 KB)
- * Reserve lower area for ROM
- */
 MEMORY
 {
-    OCM (rwx) : ORIGIN = 0x402F1000, LENGTH = 48K
+    OCM (rwx) : ORIGIN = 0x402F0400, LENGTH = 64K
 }
 
-/* ---------------- Stack symbols ---------------- */
-__stack_top__    = ORIGIN(OCM) + LENGTH(OCM);
-__stack_bottom__ = __stack_top__ - 8K;
+/* Tunables */
+__stack_size__ = 8K;
+__heap_size__  = 16K;
 
 SECTIONS
 {
@@ -50,13 +45,13 @@ SECTIONS
         __bss_end__ = .;
     } > OCM
 
-    /* ---------------- Heap ---------------- */
-    .heap (NOLOAD) : {
-        . = ALIGN(8);
-        __heap_start__ = .;
-        . = . + 4K;
-        __heap_end__ = .;
-    } > OCM
+    /* ---------- Heap ---------- */
+    . = ALIGN(8);
+    __heap_start__ = .;
+    . = . + __heap_size__;
+    __heap_end__ = .;
 
-    __image_end__ = .;
+    /* ---------- Stack ---------- */
+    __stack_top__    = ORIGIN(OCM) + LENGTH(OCM);
+    __stack_bottom__ = __stack_top__ - __stack_size__;
 }

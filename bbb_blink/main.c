@@ -1,4 +1,8 @@
 #include <stdint.h>
+#include "uart.h"
+
+
+void printf(const char *fmt, ...);
 
 #define CM_PER_BASE     0x44E00000
 #define CM_PER_GPIO1_CLKCTRL (CM_PER_BASE + 0xAC)
@@ -21,6 +25,7 @@ static void delay(volatile unsigned count) {
 
 int main(void)
 {
+    uart_init();
     /* Enable GPIO1 clock */
     *(volatile uint32_t*)CM_PER_GPIO1_CLKCTRL = 0x2;
     while ((*(volatile uint32_t*)CM_PER_GPIO1_CLKCTRL & 0x3) != 0x2);
@@ -33,6 +38,7 @@ int main(void)
     *oe &= ~USR3_PIN;
 
     while (1) {
+        printf("Hello world - Toggling leds\n\r");
         *(volatile uint32_t*)GPIO_SETDATAOUT = USR0_PIN;
         *(volatile uint32_t*)GPIO_SETDATAOUT = USR2_PIN;
         *(volatile uint32_t*)GPIO_CLEARDATAOUT = USR1_PIN;
